@@ -12,9 +12,15 @@ app.use(express.json());
 const PORT = process.env.PORT || 3001;
 const TWENTY_API_KEY = process.env.TWENTY_API_KEY;
 const TWENTY_BASE_URL = process.env.TWENTY_BASE_URL || "https://api.twenty.com";
+const MCP_AUTH_TOKEN = process.env.MCP_AUTH_TOKEN;
 
 if (!TWENTY_API_KEY) {
   console.error("ERROR: TWENTY_API_KEY environment variable is required");
+  process.exit(1);
+}
+
+if (!MCP_AUTH_TOKEN) {
+  console.error("ERROR: MCP_AUTH_TOKEN environment variable is required");
   process.exit(1);
 }
 
@@ -101,8 +107,26 @@ function sendToMcp(request) {
   });
 }
 
+// Middleware: validate Bearer token from Authorization header
+function validateAuth(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.startsWith("Bearer ")
+    ? authHeader.slice(7)
+    : null;
+
+  if (!token || token !== MCP_AUTH_TOKEN) {
+    return res.status(401).json({
+      jsonrpc: "2.0",
+      error: { code: -32001, message: "Invalid token" },
+      id: null,
+    });
+  }
+
+  next();
+}
+
 // POST /mcp — accepts JSON-RPC requests and proxies them to the MCP server
-app.post("/mcp", async (req, res) => {
+app.post("/mcp", validateAuth, async (req, res) => {
   const request = req.body;
 
   if (!request || typeof request !== "object") {
